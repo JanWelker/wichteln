@@ -1,0 +1,97 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h2>Runde: {{ round.name }}</h2>
+    <a href="/" class="btn btn-outline-secondary">Zurück zur Übersicht</a>
+</div>
+
+<div class="row">
+    <div class="col-md-5">
+        <div class="card mb-4">
+            <div class="card-header">Teilnehmer hinzufügen</div>
+            <div class="card-body">
+                {% if not round.assignments %}
+                <form method="POST">
+                    <div class="mb-3">
+                        <label for="name" class="form-label">Name</label>
+                        <input type="text" class="form-control" id="name" name="name" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="email" class="form-label">Email Adresse</label>
+                        <input type="email" class="form-control" id="email" name="email" required>
+                    </div>
+                    <button type="submit" class="btn btn-success">Hinzufügen</button>
+                </form>
+                {% else %}
+                <div class="alert alert-warning">
+                    Zuweisung bereits erfolgt. Um Teilnehmer zu ändern, muss die Zuweisung zurückgesetzt werden.
+                </div>
+                <form method="POST" action="{{ url_for('reset_round', round_id=round.id) }}"
+                    onsubmit="return confirm('Sicher? Alle aktuellen Zuweisungen werden gelöscht.');">
+                    <button type="submit" class="btn btn-danger w-100">Zuweisungen zurücksetzen</button>
+                </form>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-7">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span>Teilnehmerliste ({{ round.participants|length }})</span>
+                {% if not round.assignments and round.participants|length >= 2 %}
+                <form method="POST" action="{{ url_for('assign', round_id=round.id) }}">
+                    <button type="submit" class="btn btn-primary btn-sm">🎁 Wichtel Zuweisen!</button>
+                </form>
+                {% endif %}
+            </div>
+            <div class="card-body p-0">
+                <table class="table table-striped mb-0">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Email</th>
+                            {% if round.assignments %}
+                            <th>Ergebnis (Admin View)</th>
+                            {% endif %}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% if round.assignments %}
+                        {# Map assignments for easy lookup #}
+                        {% set assignments_map = {} %}
+                        {% for a in round.assignments %}
+                        {% set _ = assignments_map.update({a.giver_id: a.receiver}) %}
+                        {% endfor %}
+
+                        {% for p in round.participants %}
+                        <tr>
+                            <td>{{ p.name }}</td>
+                            <td>{{ p.email }}</td>
+                            <td>
+                                Hat <strong>{{ assignments_map[p.id].name }}</strong> gezogen.
+                            </td>
+                        </tr>
+                        {% endfor %}
+                        {% else %}
+                        {% for p in round.participants %}
+                        <tr>
+                            <td>{{ p.name }}</td>
+                            <td>{{ p.email }}</td>
+                        </tr>
+                        {% endfor %}
+                        {% endif %}
+
+                        {% if not round.participants %}
+                        <tr>
+                            <td colspan="3" class="text-center text-muted p-3">Keine Teilnehmer vorhanden.</td>
+                        </tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
