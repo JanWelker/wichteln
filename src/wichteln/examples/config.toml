@@ -1,0 +1,13 @@
+# Wichteln configuration. No secrets here: the SMTP password lives in the
+# macOS Keychain (security add-generic-password -s wichteln -a smtp -U -w).
+
+[smtp]
+host = "smtp.example.org"
+port = 465                       # 465 = TLS from the start; 587 = STARTTLS
+username = "wichteln@example.org"
+
+[mail]
+from = "Wichteln <wichteln@example.org>"
+reply_to = "wichteln@example.org"               # dedicated mailbox, not the admin's normal inbox
+envelope_from = "wichteln@example.org"          # receives late bounces
+event_line = "Bescherung am 24.12. bei ..."     # optional free text

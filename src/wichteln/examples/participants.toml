@@ -1,0 +1,17 @@
+# Wichteln participants. The id is fixed and never reused; history refers to it.
+# Allowed id characters: a-z, 0-9 and "-", at most 32.
+
+[[participant]]
+id = "p1"
+name = "Alma"
+email = "alma@example.org"
+
+[[participant]]
+id = "p2"
+name = "Bert"
+email = "bert@example.org"
+
+[[participant]]
+id = "p3"
+name = "Cleo"
+email = "cleo@example.org"
