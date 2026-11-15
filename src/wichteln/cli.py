@@ -112,10 +112,14 @@ def _load_participants() -> list[model.Participant]:
     return config.load_participants(_data_dir() / config.PARTICIPANTS_FILE)
 
 
-def _find_draw(state: State) -> Draw:
+def _find_draw(state: State, allow_imported: bool = False) -> Draw:
     draw = state.latest_final()
     if draw is None:
         raise UsageError("no final draw found; run wichteln draw first")
+    if draw.imported and not allow_imported:
+        raise UsageError(
+            f"draw {draw.draw_id} was imported and is history only; run wichteln draw first"
+        )
     return draw
 
 
@@ -439,13 +443,47 @@ def cmd_dropout(args: argparse.Namespace) -> int:
 
 def cmd_status(args: argparse.Namespace) -> int:
     _, state = load_context()
-    draw = _find_draw(state)
+    draw = _find_draw(state, allow_imported=True)
     out(f"draw: {draw.draw_id}")
+    if draw.imported:
+        out(f"imported: history only, {len(draw.participants)} participants")
+        _not_in_draw(_file_participants(""), draw)
+        return 0
     out(f"relaxation: {draw.relaxed}")
     for gid in sorted(draw.participants):
         record = draw.sends.get(gid)
         out(f"{gid}: {record.result if record else 'pending'}")
     _not_in_draw(_file_participants(""), draw)
+    return 0
+
+
+def cmd_import(args: argparse.Namespace) -> int:
+    key, state = load_context()
+    path = Path(args.file)
+    year, pairs = config.load_import(path)
+    if year >= current_year():
+        raise UsageError(f"can only import draws from before {current_year()}")
+    if state.current(year) is not None:
+        raise UsageError(f"a final draw for {year} exists; nothing imported")
+    # Names and addresses are never used for an imported draw: it only forbids matches.
+    snapshot = {pid: model.Participant(id=pid, name="", email="") for pid in sorted(pairs)}
+    k = 1 + sum(1 for d in state.draws if d.year == year)
+    draw = Draw(
+        draw_id=f"{year}-{k}",
+        year=year,
+        status="final",
+        relaxed="none",
+        created_at=model.now_utc(),
+        participants=snapshot,
+        pairs=pairs,
+        event_line="",
+        imported=True,
+    )
+    state.draws.append(draw)
+    store.save(_data_dir(), key, state)
+    out(f"imported: {draw.draw_id} ({len(pairs)} participants)")
+    out(history_line(state, current_year()))
+    err(f"now delete {path}: it holds the matches in plain text")
     return 0
 
 
@@ -483,6 +521,10 @@ def build_parser() -> Parser:
     p.add_argument("id", help="participant ID")
     p.add_argument("--yes", action="store_true", help="answer the question with yes")
     p.set_defaults(func=cmd_dropout)
+
+    p = sub.add_parser("import", help="add an earlier year's draw as history")
+    p.add_argument("file", help="TOML file with 'year' and a [pairs] table")
+    p.set_defaults(func=cmd_import)
 
     p = sub.add_parser("status", help="show send results of the current draw")
     p.set_defaults(func=cmd_status)

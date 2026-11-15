@@ -195,6 +195,7 @@ def assert_no_name_leak(output, state=None, allowed=None):
         for draw in state.draws:
             names |= {p.name for p in draw.participants.values()}
     names.discard(allowed)
+    names.discard("")
     for line in output.splitlines():
         for name in names:
             assert name not in line, f"name leaked in output line: {line!r}"

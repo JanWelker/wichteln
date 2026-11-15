@@ -59,9 +59,40 @@ uv tool install --python 3.12 --managed-python .
 | `wichteln send [<id>]` | Sends pending emails, or one participant's email again. |
 | `wichteln dropout <id> [--yes]` | Removes a participant after the draw. |
 | `wichteln status` | Shows the send result per participant ID. |
+| `wichteln import <file>` | Adds an earlier year's draw as history, so its matches aren't repeated. |
 
 Exit codes: 0 success, 1 usage or input error (or failed `preflight`), 2 some emails
 failed, 3 state, key or Keychain error.
+
+## Importing earlier draws
+
+Draws made before the tool (on paper or elsewhere) can be added as history, so
+`draw` avoids repeating them. Write a TOML file **outside** any git repository:
+
+```toml
+year = 2025
+
+[pairs]            # giver ID = recipient ID
+p1 = "p2"
+p2 = "p5"          # p5 and p6 took part in 2025 but not this year
+p5 = "p3"
+p3 = "p4"
+p4 = "p6"
+p6 = "p1"
+```
+
+Use the same IDs as in `participants.toml`. People who don't take part this year still
+need an ID; keep it for them if they come back. Every giver must appear exactly once as
+a recipient. Then:
+
+```sh
+wichteln import draw-2025.toml
+rm draw-2025.toml
+```
+
+Only years before the current one can be imported, one draw per year. An imported draw
+is history only: `send` and `dropout` refuse it until this year's `draw` exists.
+Matches with people who don't take part this year simply never come up.
 
 ## Yearly runbook
 

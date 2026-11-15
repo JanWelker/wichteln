@@ -739,3 +739,117 @@ def test_main_module():
     )
     assert proc.returncode == 0
     assert proc.stdout.startswith("wichteln ")
+
+
+# --- import -------------------------------------------------------------------
+
+
+def write_import(run, text):
+    path = run.data_dir.parent / "draw-2025.toml"
+    path.write_text(text)
+    return str(path)
+
+
+# p1..p4 attend this year; p5 and p6 attended 2025 only.
+IMPORT_2025 = """
+year = 2025
+
+[pairs]
+p1 = "p2"
+p2 = "p5"
+p5 = "p3"
+p3 = "p4"
+p4 = "p6"
+p6 = "p1"
+"""
+
+
+def test_import_then_draw(run, rng, fake_transport):
+    run.setup()
+    path = write_import(run, IMPORT_2025)
+    assert run("import", path) == 0
+    assert "imported: 2025-1 (6 participants)" in run.out
+    assert "history: 2025-1" in run.out
+    assert "now delete" in run.err and "draw-2025.toml" in run.err
+    imported = run.state().draws[0]
+    assert imported.imported and imported.status == "final"
+    for seed in range(20):
+        rng["seed"] = seed
+        state = run.state()
+        state.draws = state.draws[:1]
+        run.save(state)
+        assert run("draw") == 0
+        assert "history: 2025-1" in run.out
+        new = run.state().draws[1]
+        assert new.relaxed == "none"
+        assert new.pairs["p1"] != "p2" and new.pairs["p3"] != "p4"
+
+
+def test_import_two_years(run, year):
+    run.setup()
+    assert run("import", write_import(run, IMPORT_2025)) == 0
+    text = '\nyear = 2024\n[pairs]\np1 = "p3"\np3 = "p1"\n'
+    assert run("import", write_import(run, text)) == 0
+    assert "history: 2025-1, 2024-1" in run.out
+
+
+def test_send_and_dropout_refuse_imported(run, fake_transport):
+    run.setup()
+    run("import", write_import(run, IMPORT_2025))
+    assert run("send") == 1
+    assert "imported" in run.err and "wichteln draw" in run.err
+    assert run("send", "p1") == 1
+    assert run("dropout", "p1", "--yes") == 1
+    assert fake_transport.sent == []
+    assert run("status") == 0
+    assert run.out.splitlines() == [
+        "draw: 2025-1",
+        "imported: history only, 6 participants",
+    ]
+
+
+def test_import_refuses_current_year_and_duplicates(run):
+    run.setup()
+    assert run("import", write_import(run, IMPORT_2025.replace("2025", "2026"))) == 1
+    assert "before 2026" in run.err
+    assert run("import", write_import(run, IMPORT_2025)) == 0
+    assert run("import", write_import(run, IMPORT_2025)) == 1
+    assert "a final draw for 2025 exists" in run.err
+    assert len(run.state().draws) == 1
+
+
+def test_import_needs_state(run):
+    run.write_participants()
+    assert run("import", write_import(run, IMPORT_2025)) == 3
+
+
+@pytest.mark.parametrize(
+    "text,match",
+    [
+        ('year = 2025\n[pairs]\np1 = "p2"\np2 = "p2"\n', "p2: gives to themselves"),
+        ('year = 2025\n[pairs]\np1 = "p2"\np2 = "p3"\np3 = "p2"\n', "p1: never a recipient"),
+        ('year = 2025\n[pairs]\np1 = "p2"\np2 = "p1"\n[x]\n', "exactly 'year'"),
+        ('year = 2025\n[pairs]\np1 = "p2"\np2 = "p3"\n', "p3: recipient but not a giver"),
+        ('year = 2025\n[pairs]\np1 = "p2"\n', "p2: recipient but not a giver"),
+        ('year = 2025\n[pairs]\np1 = "p1"\n', "gives to themselves"),
+        ('year = 2025\n[pairs]\np1 = "p2"\np2 = "p1"\np3 = "p1"\n', "p3: never a recipient"),
+        ('year = 2025\n[pairs]\np1 = "p2"\n[pairs2]\n', "exactly 'year'"),
+        ('year = "2025"\n[pairs]\np1 = "p2"\np2 = "p1"\n', "'year' must be an integer"),
+        ("year = 2025\npairs = 5\n", "'pairs' must be a table"),
+        ('year = 2025\n[pairs]\nAlma = "p2"\np2 = "p1"\n', "a giver ID"),
+        ('year = 2025\n[pairs]\np1 = "Bert"\np2 = "p1"\n', "p1: recipient must be"),
+        ('year = 2025\n[pairs]\np1 = "p2"\np1 = "p3"\n', "invalid TOML at line 4"),
+        ("year = 2025\n[pairs]\n", "at least 2 givers"),
+    ],
+)
+def test_import_invalid(run, text, match):
+    run.setup()
+    assert run("import", write_import(run, text)) == 1
+    assert match in run.err
+    assert run.state().draws == []
+
+
+def test_import_missing_file(run):
+    run.setup()
+    assert run("import", str(run.data_dir / "nope.toml")) == 1
+    assert "nope.toml: not found" in run.err

@@ -150,3 +150,37 @@ def load_config(path: Path) -> tuple[SmtpConfig, MailConfig]:
             event_line=event_line,
         ),
     )
+
+
+def load_import(path: Path) -> tuple[int, dict[str, str]]:
+    """Load an earlier draw to import: ``year`` and a ``[pairs]`` table of giver = recipient.
+
+    Messages name only IDs, never a match.
+    """
+    name = path.name
+    data = _read_toml(path)
+    if set(data) != {"year", "pairs"}:
+        raise ConfigError(f"{name}: needs exactly 'year' and a [pairs] table")
+    year = data["year"]
+    if type(year) is not int:
+        raise ConfigError(f"{name}: 'year' must be an integer")
+    pairs = data["pairs"]
+    if not isinstance(pairs, dict):
+        raise ConfigError(f"{name}: 'pairs' must be a table of giver = recipient")
+    for giver, recipient in pairs.items():
+        if not ID_PATTERN.fullmatch(giver):
+            raise ConfigError(f"{name}: a giver ID isn't 1-32 characters of a-z, 0-9 or -")
+        if not isinstance(recipient, str) or not ID_PATTERN.fullmatch(recipient):
+            raise ConfigError(f"{name}: {giver}: recipient must be a participant ID")
+        if giver == recipient:
+            raise ConfigError(f"{name}: {giver}: gives to themselves")
+    ids = set(pairs)
+    extra = sorted(set(pairs.values()) - ids)
+    if extra:
+        raise ConfigError(f"{name}: {', '.join(extra)}: recipient but not a giver")
+    missing = sorted(ids - set(pairs.values()))
+    if missing:
+        raise ConfigError(f"{name}: {', '.join(missing)}: never a recipient")
+    if len(ids) < MIN_PARTICIPANTS:
+        raise ConfigError(f"{name}: at least {MIN_PARTICIPANTS} givers are needed")
+    return year, dict(pairs)

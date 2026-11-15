@@ -44,7 +44,7 @@ Success means that, after one season, the admin has not had to look up or pass o
 
 *   **G1: One command makes the draw and delivers it.** A single `draw` command reads the participant list, picks a valid draw and emails each participant only their own match.
 *   **G2: No self-matches.** No participant is ever assigned to themselves.
-*   **G3: No recent repeats.** A directed match (A gives to B) that appeared in either of the two previous final draws is not used again. B giving to A is still allowed. History starts empty: no paper draws are imported.
+*   **G3: No recent repeats.** A directed match (A gives to B) that appeared in either of the two previous final draws is not used again. B giving to A is still allowed. Earlier draws made without the tool can be imported as history with `wichteln import`.
 *   **G4: The tool always ends.** If no draw meets all rules, the tool first drops the rule for the older of the two previous draws, then the rule for the newer one, and tells the admin which rule it relaxed. It never loops forever and never shows matches while doing this.
 *   **G5: The admin doesn't see matches by accident.** No match appears in the tool's terminal output, in log files, in git, or in readable form in stored files. Given a relay account used only for Wichteln whose mailbox, including its Sent folder, replies and bounces, the admin doesn't read routinely and empties unread after each gift exchange, no match reaches the admin's normal inbox through Sent copies, bounces or replies. Auto-replies are discouraged by headers, not prevented.
 *   **G6: Dropouts change one match when the rules allow it.** When a participant drops out after the draw, the tool splices them out, so only the dropout's giver gets a new match and an email. If the splice breaks a rule, the tool makes a full new draw and emails everyone in it. Every email states which draw it belongs to, and a replacement email names the earlier email it replaces by date and time.
@@ -66,7 +66,6 @@ Success means that, after one season, the admin has not had to look up or pass o
 *   **Hiding from the admin who gave to a dropout.** After a splice, only the dropout's giver is pending. If that giver's replacement email fails, or their address in `participants.toml` changed, the failure line, the address question or `status` shows that giver's ID. Because the admin knows who dropped out, they then learn that match. Hiding pending givers would remove the only way to fix a bad address, so this is accepted.
 *   **Late joiners.** A participant joining after the draw means `draw --redraw`, and everyone gets a replacement email. Inserting a late joiner into one match is listed under [Future Improvements](#future-improvements).
 *   **Telling people removed before a re-draw.** Givers who are in a voided draw but not in the new one (removed from `participants.toml` before a `--redraw`) get no email. The admin tells them.
-*   **Importing past paper draws.** History starts with the first draw made by the tool.
 *   **Deleting old draws.** All draws stay in `state.enc`. Pruning would gain little, because the laptop backup keeps older versions of the file anyway, and void draws are needed to number new draws.
 *   **A database server, metrics or alerting.** One draw holds at most 10 matches and 10 send records.
 
@@ -225,6 +224,7 @@ The subject is fixed in the code, so it can never contain a name.
 | `pairs` | Giver ID → recipient ID. |
 | `event_line` | Copy of `mail.event_line` from `config.toml` at draw time, so a resend has the same text even if the config changed. |
 | `replaces` | Giver ID → time of the earlier email this giver's next email replaces. Empty for a first draw. |
+| `imported` | `true` for a draw added with `wichteln import`. It counts as history but is never sent. Missing means `false`. |
 | `sends` | Giver ID → result of the latest send (`result`, `at`) and `accepted_at`, the time of the last accepted send. A failed send keeps the earlier `accepted_at`, so a giver who once received an email is never treated as if they hadn't. A giver with no entry or a `failed` result is pending. |
 
 Timestamps are ISO-8601 UTC with a `Z` suffix. Fernet detects tampering or a wrong key, and the tool then stops with an error instead of misreading the file.
@@ -259,6 +259,7 @@ At `both_draws` a valid draw always exists for 2 or more participants. Every arr
 | `wichteln send [<id>]` | Without `<id>`, sends every pending email of the newest final draw. With `<id>`, sends that participant's current email again, whatever its status. Doesn't change the matches. If a giver's address in `participants.toml` differs from the stored one, asks `[y/N]` before using the new one. | "sent X of N", one line per failed send |
 | `wichteln dropout <id> [--yes]` | Checks the ID and that at least 2 participants would remain, then asks `Remove <name> (<id>) from draw <draw_id>? [y/N]` (`--yes` skips the question). Then splices the dropout out if the rules allow it. Otherwise voids the draw and makes a full new draw for the same year without them. Then sends only the pending emails. | "spliced; sent X of N" or "full re-draw; sent X of N", where N is the number of pending givers |
 | `wichteln status` | Shows the newest final draw's ID, relaxation level, and per giver ID the latest send result. Lists IDs in the file that aren't in that draw. | Giver IDs and send results, never recipients |
+| `wichteln import <file>` | Adds a draw from an earlier year (made without the tool) as a `final` draw with `imported: true`. The file holds `year` and a `[pairs]` table of giver ID = recipient ID; the pairs must form a valid draw. Refuses the current or a later year, and a year that already has a final draw. The snapshot holds only the IDs, with empty names and addresses. `send` and `dropout` refuse an imported draw. | The new draw ID, the participant count, the history line, and a reminder to delete the file |
 
 `draw` stores the draw before sending any email. If the program stops part-way, `send` finishes the job from the same stored draw, and the guard in `draw` stops a second draw from being made by accident.
 

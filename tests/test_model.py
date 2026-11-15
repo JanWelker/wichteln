@@ -107,3 +107,15 @@ def test_history_and_latest():
 
 def test_now_utc():
     assert re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z", now_utc())
+
+
+def test_imported_flag():
+    state = make_state(make_draw({"p1": "p2", "p2": "p1"}))
+    state.draws[0].imported = True
+    assert from_dict(to_dict(state)).draws[0].imported is True
+    data = to_dict(state)
+    del data["draws"][0]["imported"]
+    assert from_dict(data).draws[0].imported is False
+    data["draws"][0]["imported"] = "yes"
+    with pytest.raises(ValueError):
+        from_dict(data)

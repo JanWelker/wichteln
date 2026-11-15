@@ -58,6 +58,7 @@ class Draw:
     event_line: str
     replaces: dict[str, str] = field(default_factory=dict)
     sends: dict[str, SendRecord] = field(default_factory=dict)
+    imported: bool = False
 
     def pending(self) -> list[str]:
         return sorted(
@@ -111,6 +112,7 @@ def to_dict(state: State) -> dict[str, Any]:
                     g: {"result": s.result, "at": s.at, "accepted_at": s.accepted_at}
                     for g, s in d.sends.items()
                 },
+                "imported": d.imported,
             }
             for d in state.draws
         ],
@@ -144,6 +146,9 @@ def _draw_from_dict(data: dict[str, Any]) -> Draw:
     year = data["year"]
     if type(year) is not int:
         raise ValueError("year is not an int")
+    imported = data.get("imported", False)
+    if type(imported) is not bool:
+        raise ValueError("imported is not a bool")
 
     participants: dict[str, Participant] = {}
     for pid, p in _dict(data["participants"]).items():
@@ -182,6 +187,7 @@ def _draw_from_dict(data: dict[str, Any]) -> Draw:
         event_line=_str(data["event_line"]),
         replaces=replaces,
         sends=sends,
+        imported=imported,
     )
 
 
