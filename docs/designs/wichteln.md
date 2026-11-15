@@ -118,26 +118,35 @@ Success means that, after one season, the admin has not had to look up or pass o
 
 ### Components
 
-```text
-                    admin's laptop
- ┌──────────────────────────────────────────────────────────────┐
- │  wichteln CLI (Python)                                       │
- │                                                              │
- │   cli ──► solver ──► store ──► templates ──► mailer ─────────┼──► SMTP relay ──► participant inboxes
- │    │   (pure, no I/O) (Fernet file)            ▲             │        │
- │    │                     ▲                     │             │        └─ late bounces, replies ──► dedicated
- │    ▼                     │                     │             │                                     Wichteln mailbox
- │   terminal: counts,      │                     │             │                                     (not the admin's
- │   IDs, levels only       │                     │             │                                      normal inbox)
- │                          │                     │             │
- │   macOS Keychain ◄──► keychain ──► Fernet key ─┘             │
- │                          └──────► SMTP password ──► mailer   │
- │                                                              │
- │   data folder (~/Wichteln, covered by the laptop backup):    │
- │     participants.toml   plain text, no matches  ──► config   │
- │     config.toml         plain text, no secrets  ──► config   │
- │     state.enc           encrypted: all draws and send results│
- └──────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart LR
+    subgraph laptop["admin's laptop"]
+        subgraph app["wichteln CLI (Python)"]
+            cli --> solver["solver<br/>(pure, no I/O)"]
+            solver --> store["store<br/>(Fernet file)"]
+            store --> templates
+            templates --> mailer
+            keychain
+        end
+        term["terminal:<br/>counts, IDs, levels only"]
+        kc[("macOS Keychain")]
+        subgraph data["data folder (~/Wichteln, covered by the laptop backup)"]
+            participants["participants.toml<br/>plain text, no matches"]
+            configfile["config.toml<br/>plain text, no secrets"]
+            statefile[("state.enc<br/>encrypted: all draws and send results")]
+        end
+        cli --> term
+        kc <--> keychain
+        keychain -- Fernet key --> store
+        keychain -- SMTP password --> mailer
+        participants --> config
+        configfile --> config
+        config --> cli
+        store <--> statefile
+    end
+    mailer --> relay["SMTP relay"]
+    relay --> inboxes["participant inboxes"]
+    relay -- "late bounces, replies" --> box["dedicated Wichteln mailbox<br/>(not the admin's normal inbox)"]
 ```
 
 The program has these modules. Only `solver`, `rules` and `splice` contain the draw logic.

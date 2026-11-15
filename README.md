@@ -6,6 +6,19 @@ previous years, and emails each person only the name of the person they give a g
 The admin never sees a match: the terminal shows only counts, IDs and levels, and every
 draw is stored encrypted.
 
+```mermaid
+flowchart LR
+    subgraph laptop["admin's laptop"]
+        files["participants.toml<br/>config.toml"] --> cli["wichteln CLI"]
+        kc[("macOS Keychain<br/>Fernet key, SMTP password")] --> cli
+        cli <--> statefile[("state.enc<br/>encrypted draws")]
+        cli --> term["terminal:<br/>counts, IDs, levels only"]
+    end
+    cli --> relay["SMTP relay"]
+    relay --> inboxes["participant inboxes<br/>(one match each)"]
+    relay -- "bounces, replies" --> box["dedicated Wichteln mailbox"]
+```
+
 The design is in [`docs/designs/wichteln.md`](docs/designs/wichteln.md).
 
 ## Install
